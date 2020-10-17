@@ -9,25 +9,24 @@
 #include <cstdio>
 #include <unistd.h>
 
-int setup(char* filename, int filesize, bool direct) {
-  int flags = O_CREAT | O_RDWR | O_TRUNC;
+int chunk_size = 64;
+
+int setup(char* filename, bool direct) {
+  int flags = O_CREAT | O_RDWR;
   if (direct) {
     flags |= O_DIRECT;
   }
 
-  int fd = open(filename, flags, S_IRUSR | S_IWUSR);
+  int fd = open(filename, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
   if (fd == -1) {
     std::cerr << "Unable to create file\n";
     std::abort();
   }
   
-  if (ftruncate(fd, (off_t) filesize) != 0) {
-    std::cerr << "Unable to create file with length: " + std::to_string(filesize) + "\n";
-    std::abort();
-  }
-
   return fd;
 }
+
+
 /* 
  * Initializes the aio context object and return the file descriptor
  * of the swap file created
@@ -38,6 +37,25 @@ int setup(char* filename, int filesize, bool direct) {
   //}
 //}
 
+void aio_sequential_read(int fd, size_t filesize) {
+  char buffer[chunk_size + 1]; 
+  int total = 0;
+  ssize_t bytes_read;
+  while ((bytes_read = read(fd, buffer, chunk_size)) > 0) {
+    total += bytes_read;
+  }
+
+  std::cout << "Number of bytes read: " << total << "\n";
+}
+
+void aio_random_read(int fd, size_t filesize, int num_iterations) {
+  for (int i = 0; i < num_iterations; i++) {
+    int r = rand() % filesize;
+
+  }
+
+}
+
 int main(int argc, char *argv[]) {
   if (argc != 5) {
     std::cerr << "Usage: ./benchmark <aio/io_uring> swapfile(string) filesize(int) max_concurrent_swaps(int)\n";
@@ -45,26 +63,24 @@ int main(int argc, char *argv[]) {
   }
 
   std::string lib = argv[1];
+  size_t filesize = (size_t) std::stoi(argv[3]);
 
-  int swapfd = setup(argv[2], std::stoi(argv[3]), lib == "aio");
-  int chunk_size = 64;
-  void* buffer = (void*) malloc (chunk_size); 
+  int swapfd = setup(argv[2], lib == "aio");
 
   //io_context_t aio_ctx;
 
   auto start = std::chrono::steady_clock::now();
-  perform_sequential_read();
+  aio_sequential_read(swapfd, filesize);
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> diff = end-start;
   std::cout << "Total Execution Time (Sequential Read): " << diff.count() << " seconds\n";
 
-  int num_iterations = 10000;
   start = std::chrono::steady_clock::now();
-  perform_random_read();
+  aio_random_read(swapfd, filesize, 1000);
   end = std::chrono::steady_clock::now();
   diff = end-start;
   std::cout << "Total Execution Time (Random Read): " << diff.count() << " seconds\n";
 
-  free(buffer);
+  close(swapfd);
   return 0;
 }
