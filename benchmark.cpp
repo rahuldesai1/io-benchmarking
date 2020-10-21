@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <cstdio>
 #include <unistd.h>
+#include <liburing.h>
 
 static int chunk_size = 4096;
 // the O_DIRECT flag requires the data to be block aligned
@@ -76,27 +77,50 @@ void aio_read(io_context_t *aio_ctx, int fd, size_t filesize) {
       std::cerr << "Failed to retrieve events: " << rv;
       std::abort();
     }
+
+    if (events[0].res < 0) {
+      std::cerr << "The system call invoked asynchonously failed: " << events[0].res << "\n";
+      std::abort();
+    }
   }
 
   std::cout << "Average Initialization Time (AIO): " << average_time.count() / num_iterations << "\n";
 }
 
-void initialize_uring(struct iouring *ring) {
-  io_uring_queue_init(10, &ring, 0);
+void initialize_uring(struct io_uring *ring) {
+  io_uring_queue_init(10, ring, 0);
 }
 
-void uring_read(struct iouring *ring, int fd, size_t filesize) {
+void uring_read(struct io_uring *ring, int fd, size_t filesize) {
+  std::chrono::duration<double> average_time = std::chrono::steady_clock::duration::zero();
+  int num_iterations = 0;
   for (int i = 0; i + chunk_size <= filesize; i += chunk_size) {
     auto start = std::chrono::steady_clock::now();
     struct io_uring_sqe *sqe = io_uring_get_sqe(ring);
     io_uring_prep_read(sqe, fd, buffer, chunk_size, i);
-    io_uring_submit(ring);
+    if (io_uring_submit(ring) != 1) {
+      std::cerr << "Failed to submit uring read operation\n";
+      std::abort();
+    } 
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> diff = end-start;
+    average_time += diff;
+    num_iterations += 1;
 
     struct io_uring_cqe *cqe;
-    io_uring_wait_cqe(ring, &cqe);
+    int rv = io_uring_wait_cqe(ring, &cqe);
+    if (rv < 0) {
+      std::cerr << "Failed to retrieve events: " << rv;
+      std::abort();
+    }
+
+    if (cqe->res < 0) {
+      std::cerr << "The system call invoked asynchonously failed: " << cqe->res << "\n";
+      std::abort();
+    }
+    io_uring_cqe_seen(ring, cqe);
   }
+  std::cout << "Average Initialization Time (Uring): " << average_time.count() / num_iterations << "\n";
 }
 
 int main(int argc, char *argv[]) {
@@ -109,21 +133,23 @@ int main(int argc, char *argv[]) {
   size_t filesize = (size_t) std::stoi(argv[2]);
 
   /** Mostly a sanity check to make sure that the read operation works **/
-  //baseline_read(swapfd, filesize);
-  // // reset the file pointer to the beginning
-  //lseek(swapfd, 0, SEEK_SET);
+  /**
+  baseline_read(swapfd, filesize);
+   // reset the file pointer to the beginning
+  lseek(swapfd, 0, SEEK_SET);
+  **/
 
   /** Execute AIO operations **/
-  io_context_t aio_ctx = 0;
-  initialize_aio(&aio_ctx);
-  aio_read(&aio_ctx, swapfd, filesize);
-  io_destroy(aio_ctx);
+  //io_context_t aio_ctx = 0;
+  //initialize_aio(&aio_ctx);
+  //aio_read(&aio_ctx, swapfd, filesize);
+  //io_destroy(aio_ctx);
 
-  // reset the file pointer to the beginning
-  lseek(swapfd, 0, SEEK_SET);
+  //// reset the file pointer to the beginning
+  //lseek(swapfd, 0, SEEK_SET);
 
   /** Execute URING operations **/
-  struct iouring ring;
+  struct io_uring ring;
   initialize_uring(&ring);
   uring_read(&ring, swapfd, filesize);
 

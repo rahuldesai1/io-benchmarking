@@ -4,10 +4,10 @@ FILESIZE = 200000000 #500MB
 default: benchmark create_file
 
 benchmark: benchmark.cpp
-	clang++ -std=c++2a -laio benchmark.cpp -o benchmark
+	clang++ -Wall -std=c++2a -laio -luring benchmark.cpp -o benchmark
 
 create_file: create_test_file.cpp
-	clang++ -std=c++2a create_test_file.cpp -o create_file
+	clang++ -Wall -std=c++2a create_test_file.cpp -o create_file
 
 .PHONY: test
 test:
