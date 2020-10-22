@@ -40,7 +40,6 @@ void baseline_read(int fd, size_t filesize) {
   std::cout << "Number of bytes read: " << total << "\n";
 }
 
-
 /* 
  * AIO
  */
@@ -89,7 +88,7 @@ void aio_sequential_read(io_context_t *aio_ctx, int fd, size_t filesize) {
     num_iterations += 1;
 
   }
-  std::cout << "AIO: Average Initialization Time (Sequential Read): " << average_time.count() / num_iterations << "\n";
+  std::cout << "AIO: Average Initialization Time (Sequential Read): " << 1000 * average_time.count() / num_iterations << "ms\n";
 }
 
 void aio_random_read(io_context_t *aio_ctx, int fd, size_t filesize, size_t num_reads) {
@@ -102,7 +101,7 @@ void aio_random_read(io_context_t *aio_ctx, int fd, size_t filesize, size_t num_
     num_iterations += 1;
 
   }
-  std::cout << "AIO: Average Initialization Time (Random Read): " << average_time.count() / num_iterations << "\n";
+  std::cout << "AIO: Average Initialization Time (Random Read): " << 1000 * average_time.count() / num_iterations << "ms\n";
 }
 
 /*
@@ -152,7 +151,7 @@ void uring_sequential_read(struct io_uring *ring, int fd, size_t filesize) {
     average_time += uring_read_request(ring, fd, i);
     num_iterations += 1;
   }
-  std::cout << "IO_URING: Average Initialization Time (Sequential Read): " << average_time.count() / num_iterations << "\n";
+  std::cout << "IO_URING: Average Initialization Time (Sequential Read): " << 1000 * average_time.count() / num_iterations << "ms\n";
 }
 
 void uring_random_read(struct io_uring *ring, int fd, size_t filesize, int num_reads) {
@@ -164,7 +163,7 @@ void uring_random_read(struct io_uring *ring, int fd, size_t filesize, int num_r
     average_time += uring_read_request(ring, fd, offset);
     num_iterations += 1;
   }
-  std::cout << "IO_URING: Average Initialization Time (Random Read): " << average_time.count() / num_iterations << "\n";
+  std::cout << "IO_URING: Average Initialization Time (Random Read): " << 1000 * average_time.count() / num_iterations << "ms\n";
 }
 
 
@@ -177,13 +176,6 @@ int main(int argc, char *argv[]) {
   int swapfd = setup(argv[1]);
   size_t filesize = (size_t) std::stoi(argv[2]);
   int num_random_reads = 20000;
-
-  /** Mostly a sanity check to make sure that the read operation works **/
-  /**
-  baseline_read(swapfd, filesize);
-   // reset the file pointer to the beginning
-  lseek(swapfd, 0, SEEK_SET);
-  **/
 
   /** Execute AIO operations **/
   io_context_t aio_ctx = 0;
